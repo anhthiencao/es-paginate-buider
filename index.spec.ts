@@ -151,13 +151,13 @@ describe('convertSingleSearch', () => {
 });
 
 describe('convertFilteringElasticsearchQuery', () => {
-  test('should convert a single filter to an Elasticsearch query object', () => {
-    const filter = {
+  test('should convert a single filters to an Elasticsearch query object', () => {
+    const filters = {
       key: 'name',
       operator: Operator.eq,
       values: ['John'],
     };
-    const result = convertFilteringElasticsearchQuery(filter);
+    const result = convertFilteringElasticsearchQuery(filters);
 
     expect(result).toEqual({
       bool: {
@@ -380,7 +380,7 @@ describe('convertSingleFilter', () => {
 });
 
 describe('convertSearchingToElasticsearchQuery', () => {
-  test('should convert a single search input to an Elasticsearch query object without highlighting', () => {
+  test('should convert a single input to an Elasticsearch query object without highlighting', () => {
     const searchInput = {
       key: 'name',
       value: 'John',
@@ -546,11 +546,11 @@ describe('buildQueryArgsToElasticsearchQuery', () => {
     });
   });
 
-  test('should build a complete Elasticsearch query object with filter, search, order, and pagination', () => {
+  test('should build a complete Elasticsearch query object with filters, searches, orders, and pagination', () => {
     const result = buildQueryArgsToElasticsearchQuery({
-      filter: { key: 'name', operator: Operator.eq, values: ['John'] },
-      search: { key: 'name', value: 'John' },
-      order: { key: 'age', value: OrderingMode.ASC },
+      filters: { key: 'name', operator: Operator.eq, values: ['John'] },
+      searches: { key: 'name', value: 'John' },
+      orders: { key: 'age', value: OrderingMode.ASC },
       offset: 10,
       limit: 20,
       isHighlight: true,

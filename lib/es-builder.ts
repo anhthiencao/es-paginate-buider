@@ -230,7 +230,7 @@ export function convertSingleSearchAnalyzer(
 
 /**
  * Convert a single filter or an array of filters to an Elasticsearch query.
- * @param filter - The filter(s) to convert.
+ * @param filters - The filter(s) to convert.
  * @returns The Elasticsearch query object.
  *
  * @example
@@ -255,22 +255,22 @@ export function convertSingleSearchAnalyzer(
  */
 export function convertFilteringElasticsearchQuery<
   T extends IFilteredType = IFilteredType
->(filter: T | T[]): ElasticsearchQuery {
+>(filters: T | T[]): ElasticsearchQuery {
   const queryEs: ElasticsearchQuery = {
     bool: {},
   };
 
-  if (!filter) {
+  if (!filters) {
     return queryEs;
   }
 
-  if (Array.isArray(filter)) {
+  if (Array.isArray(filters)) {
     queryEs.bool = {
-      must: filter.map((singleFilter) => convertSingleFilter(singleFilter)),
+      must: filters.map((singleFilter) => convertSingleFilter(singleFilter)),
     };
   } else {
     queryEs.bool = {
-      must: [convertSingleFilter(filter)],
+      must: [convertSingleFilter(filters)],
     };
   }
 
@@ -648,14 +648,14 @@ export function convertOrderingToElasticsearchQuery<T extends Ordering>(
  *
  * @example
  * buildQueryArgsToElasticsearchQuery({
- *   filter: [
+ *   filters: [
  *     {
  *       key: 'name',
  *       operator: Operator.eq,
  *       values: ['John']
  *     }
  *   ],
- *   search: [
+ *   searches: [
  *     {
  *       key: 'name',
  *       value: 'John',
@@ -667,7 +667,7 @@ export function convertOrderingToElasticsearchQuery<T extends Ordering>(
  *       options: []
  *     }
  *   ],
- *   order: [
+ *   orders: [
  *     {
  *       key: 'name',
  *       value: 'asc'
@@ -734,24 +734,24 @@ export function buildQueryArgsToElasticsearchQuery<
   U extends Searching = Searching,
   V extends Ordering = Ordering
 >(args: {
-  filter?: T | T[];
-  search?: U | U[];
-  order?: V | V[];
+  filters?: T | T[];
+  searches?: U | U[];
+  orders?: V | V[];
   offset?: number;
   limit?: number;
   isHighlight?: boolean;
 }) {
   const {
-    filter = [],
-    search = [],
-    order = [],
+    filters = [],
+    searches = [],
+    orders = [],
     offset,
     limit,
     isHighlight = false,
   } = args;
-  const esFilter = convertFilteringElasticsearchQuery<T>(filter);
-  const esSearch = convertSearchingToElasticsearchQuery<U>(search, isHighlight);
-  const esOrder = convertOrderingToElasticsearchQuery<V>(order);
+  const esFilter = convertFilteringElasticsearchQuery<T>(filters);
+  const esSearch = convertSearchingToElasticsearchQuery<U>(searches, isHighlight);
+  const esOrder = convertOrderingToElasticsearchQuery<V>(orders);
 
   return {
     query: {
