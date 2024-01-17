@@ -812,6 +812,7 @@ export function buildQueryArgsToElasticsearchQuery<
   offset?: number;
   limit?: number;
   isHighlight?: boolean;
+  track_total_hits?: boolean;
 }) {
   const {
     filters = [],
@@ -820,6 +821,7 @@ export function buildQueryArgsToElasticsearchQuery<
     offset,
     limit,
     isHighlight = false,
+    track_total_hits = false,
   } = args;
   const esFilter = convertFilteringElasticsearchQuery<T>(filters);
   const esSearch = convertSearchingToElasticsearchQuery<U>(
@@ -838,6 +840,6 @@ export function buildQueryArgsToElasticsearchQuery<
     ...(limit && { size: limit }),
     ...(esOrder.length && { sort: esOrder }),
     ...(isHighlight && { highlight: esSearch.highlight }),
-    // track_total_hits: true,
+    ...(track_total_hits && { track_total_hits }),
   };
 }
