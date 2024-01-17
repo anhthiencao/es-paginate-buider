@@ -20,7 +20,7 @@ export interface ElasticsearchQuery {
  * ElasticsearchQueryOptions represents the base query options for Elasticsearch.
  */
 export interface QueryOptions {
-  searchOptions?: SearchOptions,
+  searchOptions?: SearchOptions;
 }
 
 /**
@@ -66,13 +66,12 @@ export enum SearchAnalyzes {
   EXACT_ORDER = 'exact_order',
 }
 
-
 /**
  * SearchOptions represents the additional options for searching.
  */
 export interface SearchOptions {
-  analyzers?: SearchAnalyzes[]
-  boost?: number
+  analyzers?: SearchAnalyzes[];
+  boost?: number;
 }
 
 /**
@@ -95,4 +94,14 @@ export interface IFilteredType<T = any> {
   and?: IFilteredType<T>[];
 }
 
+/**
+ * PrioritySearch represents the priority of result search.
+ */
 
+export enum PrioritySearch {
+  Highest = 5,
+  High = 4,
+  Medium = 3,
+  Low = 2,
+  Lowest = 1,
+}
