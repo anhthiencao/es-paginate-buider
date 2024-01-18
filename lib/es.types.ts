@@ -4,7 +4,6 @@
 export interface AttributeDtoEs {
   isLink: boolean;
   key?: string | null | undefined;
-  subKey?: string | null | undefined;
   rate?: number;
   allowSearchNoAccent?: boolean | null;
 }

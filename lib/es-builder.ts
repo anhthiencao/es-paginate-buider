@@ -31,35 +31,16 @@ export function convertSearchAnalyzer(
   keyword: string,
   attributes: AttributeDtoEs[]
 ): object {
-  let isLink = false;
-  const isContainSpecialChar = checkSpecialCharacters(keyword);
-  if (keyword.includes('http')) {
-    isLink = true;
-  }
-
   const keywordNoAccent = removeAccent(keyword);
   const should = [];
   for (const attribute of attributes) {
     // If keyword have accent
     if (keywordNoAccent != keyword) {
       should.push(
-        ...searchWithKeywordHasAccent(
-          attribute,
-          keyword,
-          isContainSpecialChar,
-          isLink,
-          keywordNoAccent
-        )
+        ...searchWithKeywordHasAccent(attribute, keyword, keywordNoAccent)
       );
     } else {
-      should.push(
-        ...searchWithKeywordWithoutAccent(
-          attribute,
-          keyword,
-          isContainSpecialChar,
-          isLink
-        )
-      );
+      should.push(...searchWithKeywordWithoutAccent(attribute, keyword));
     }
   }
 
@@ -77,8 +58,6 @@ export function convertSearchAnalyzer(
  * Create a single "should" clause for an Elasticsearch query.
  * @param attribute - The attribute to search.
  * @param value - The value to match.
- * @param isContainSpecialChar - Is value contain any special symbol.
- * @param isLink - Is value link.
  * @param valueNoAccent - Value remove accent.
  * @returns A single "should" clause for the Elasticsearch query.
  */
@@ -86,61 +65,37 @@ export function convertSearchAnalyzer(
 export function searchWithKeywordHasAccent(
   attribute: AttributeDtoEs,
   value: string,
-  isContainSpecialChar: boolean,
-  isLink: boolean,
   valueNoAccent: string
 ) {
+  const isLink = value.includes('http');
+  const isContainSpecialChar = checkSpecialCharacters(value);
   const should = [];
 
-  //Case: Attribute have subKey which is not keyword or accent => Priority Low
-  if (attribute.subKey) {
+  if (!isLink) {
+    //Case: Keyword is not link => search each word with priority lowest
     should.push(
       convertSingleSearchAnalyzer(
-        `${attribute.key}.${attribute.subKey}`,
-        value,
-        attribute.rate * PrioritySearch.Low
+        `${attribute.key}.accent`,
+        valueNoAccent,
+        attribute.rate * PrioritySearch.Lowest,
+        'match'
       )
     );
   }
 
   //search exactly result with special characters
   if (isContainSpecialChar) {
-    if (!isLink) {
-      //Case: Keyword is not link => search each word with priority lowest
-      should.push(
-        convertSingleSearchAnalyzer(
-          `${attribute.key}.accent`,
-          valueNoAccent,
-          attribute.rate * PrioritySearch.Lowest,
-          'match'
-        )
-      );
-    }
     should.push(
       //Case: Search all of word with priority medium (use match_phrase)
       convertSingleSearchAnalyzer(
         `${attribute.key}.accent`,
         valueNoAccent,
         attribute.rate * PrioritySearch.Medium
-      ),
-      //Case: Search exactly keyword with priority highest
-      convertSingleSearchAnalyzer(
-        `${attribute.key}.keyword`,
-        value,
-        attribute.rate * PrioritySearch.Highest,
-        'term'
       )
     );
   } else {
     if (!isLink) {
       should.push(
-        //Case: Keyword is not link => search each word which is removed accent with priority lowest
-        convertSingleSearchAnalyzer(
-          `${attribute.key}.accent`,
-          valueNoAccent,
-          attribute.rate * PrioritySearch.Lowest,
-          'match'
-        ),
         //Case: Keyword is not link => search each word with priority low
         convertSingleSearchAnalyzer(
           attribute.key,
@@ -159,6 +114,17 @@ export function searchWithKeywordHasAccent(
       )
     );
   }
+
+  should.push(
+    //Case: Search exactly keyword with priority highest
+    convertSingleSearchAnalyzer(
+      `${attribute.key}.keyword`,
+      value,
+      attribute.rate * PrioritySearch.Highest,
+      'term'
+    )
+  );
+
   return should;
 }
 
@@ -166,35 +132,23 @@ export function searchWithKeywordHasAccent(
  * Create a single "should" clause for an Elasticsearch query.
  * @param attribute - The attribute to search.
  * @param value - The value to match.
- * @param isContainSpecialChar - Is value contain any special symbol.
- * @param isLink - Is value link.
  * @returns A single "should" clause for the Elasticsearch query.
  */
 
 export function searchWithKeywordWithoutAccent(
   attribute: AttributeDtoEs,
-  keyword: string,
-  isContainSpecialChar: boolean,
-  isLink: boolean
+  value: string
 ) {
+  const isLink = value.includes('http');
+  const isContainSpecialChar = checkSpecialCharacters(value);
   const should = [];
   if (attribute.allowSearchNoAccent) {
     //Allow search without accent (use match_phrase)
     should.push(
       convertSingleSearchAnalyzer(
         `${attribute.key}.accent`,
-        keyword,
+        value,
         attribute.rate * PrioritySearch.Medium
-      )
-    );
-  }
-  if (attribute.subKey) {
-    //Case: Attribute have subKey which is not keyword or accent => Priority High
-    should.push(
-      convertSingleSearchAnalyzer(
-        `${attribute.key}.${attribute.subKey}`,
-        keyword,
-        attribute.rate * PrioritySearch.High
       )
     );
   }
@@ -206,7 +160,7 @@ export function searchWithKeywordWithoutAccent(
       should.push(
         convertSingleSearchAnalyzer(
           `${attribute.key}.accent`,
-          keyword,
+          value,
           attribute.rate * PrioritySearch.Lowest,
           'match'
         )
@@ -216,7 +170,7 @@ export function searchWithKeywordWithoutAccent(
     should.push(
       convertSingleSearchAnalyzer(
         `${attribute.key}.keyword`,
-        keyword,
+        value,
         attribute.rate * PrioritySearch.Highest,
         'term'
       )
@@ -228,7 +182,7 @@ export function searchWithKeywordWithoutAccent(
         should.push(
           convertSingleSearchAnalyzer(
             `${attribute.key}.accent`,
-            keyword,
+            value,
             attribute.rate * PrioritySearch.Lowest,
             'match'
           )
@@ -238,7 +192,7 @@ export function searchWithKeywordWithoutAccent(
       should.push(
         convertSingleSearchAnalyzer(
           attribute.key,
-          keyword,
+          value,
           attribute.rate * PrioritySearch.Low,
           'match'
         )
@@ -248,7 +202,7 @@ export function searchWithKeywordWithoutAccent(
     should.push(
       convertSingleSearchAnalyzer(
         attribute.key,
-        keyword,
+        value,
         attribute.rate * PrioritySearch.High
       )
     );
