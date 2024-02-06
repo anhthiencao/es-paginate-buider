@@ -9,6 +9,8 @@ import {
   convertSingleSearch,
   convertSingleSearchAnalyzer,
   removeAccent,
+  searchWithKeywordHasAccent,
+  searchWithKeywordWithoutAccent,
 } from './lib';
 import { Operator, OrderingMode, SearchAnalyzes } from './lib/es.types';
 
@@ -583,5 +585,244 @@ describe('buildQueryArgsToElasticsearchQuery', () => {
       sort: [{ age: 'asc' }],
       highlight: { fields: { name: {} } },
     });
+  });
+});
+
+describe('searchWithKeywordHasAccent', () => {
+  test('should search keyword with special character and has accent', () => {
+    const result = searchWithKeywordHasAccent(
+      {
+        key: 'name',
+        allowSearchNoAccent: true,
+        rate: 1,
+        isLink: false,
+      },
+      'Tân Nguyễn @',
+      'Tan Nguyen @'
+    );
+
+    expect(result).toEqual([
+      {
+        bool: {
+          must: {
+            match: {
+              'name.accent': 'Tan Nguyen @',
+            },
+          },
+          boost: 1,
+        },
+      },
+      {
+        bool: {
+          must: {
+            match_phrase: {
+              'name.accent': 'Tan Nguyen @',
+            },
+          },
+          boost: 3,
+        },
+      },
+      {
+        bool: {
+          must: {
+            term: {
+              'name.keyword': 'Tân Nguyễn @',
+            },
+          },
+          boost: 5,
+        },
+      },
+    ]);
+  });
+
+  test('should search keyword with  character has accent', () => {
+    const result = searchWithKeywordHasAccent(
+      {
+        key: 'name',
+        allowSearchNoAccent: true,
+        rate: 1,
+        isLink: false,
+      },
+      'Tân Nguyễn',
+      'Tan Nguyen'
+    );
+
+    expect(result).toEqual([
+      {
+        bool: {
+          must: {
+            match: {
+              'name.accent': 'Tan Nguyen',
+            },
+          },
+          boost: 1,
+        },
+      },
+      {
+        bool: {
+          must: {
+            match: {
+              name: 'Tân Nguyễn',
+            },
+          },
+          boost: 2,
+        },
+      },
+      {
+        bool: {
+          must: {
+            match_phrase: {
+              name: 'Tân Nguyễn',
+            },
+          },
+          boost: 4,
+        },
+      },
+      {
+        bool: {
+          must: {
+            term: {
+              'name.keyword': 'Tân Nguyễn',
+            },
+          },
+          boost: 5,
+        },
+      },
+    ]);
+  });
+
+  test('should search keyword with special character and link', () => {
+    const result = searchWithKeywordWithoutAccent(
+      {
+        key: 'name',
+        allowSearchNoAccent: true,
+        rate: 1,
+        isLink: false,
+      },
+      'https://fb.com/@abc'
+    );
+
+    expect(result).toEqual([
+      {
+        bool: {
+          must: {
+            match_phrase: {
+              'name.accent': 'https://fb.com/@abc',
+            },
+          },
+          boost: 3,
+        },
+      },
+      {
+        bool: {
+          must: {
+            term: {
+              'name.keyword': 'https://fb.com/@abc',
+            },
+          },
+          boost: 5,
+        },
+      },
+    ]);
+  });
+
+  test('should search keyword with special character', () => {
+    const result = searchWithKeywordWithoutAccent(
+      {
+        key: 'name',
+        allowSearchNoAccent: true,
+        rate: 1,
+        isLink: false,
+      },
+      'Tan Nguyen @'
+    );
+
+    expect(result).toEqual([
+      {
+        bool: {
+          must: {
+            match_phrase: {
+              'name.accent': 'Tan Nguyen @',
+            },
+          },
+          boost: 3,
+        },
+      },
+      {
+        bool: {
+          must: {
+            match: {
+              'name.accent': 'Tan Nguyen @',
+            },
+          },
+          boost: 1,
+        },
+      },
+      {
+        bool: {
+          must: {
+            term: {
+              'name.keyword': 'Tan Nguyen @',
+            },
+          },
+          boost: 5,
+        },
+      },
+    ]);
+  });
+
+  test('should search keyword', () => {
+    const result = searchWithKeywordWithoutAccent(
+      {
+        key: 'name',
+        allowSearchNoAccent: true,
+        rate: 1,
+        isLink: false,
+      },
+      'Tan Nguyen'
+    );
+
+    expect(result).toEqual([
+      {
+        bool: {
+          must: {
+            match_phrase: {
+              'name.accent': 'Tan Nguyen',
+            },
+          },
+          boost: 3,
+        },
+      },
+      {
+        bool: {
+          must: {
+            match: {
+              'name.accent': 'Tan Nguyen',
+            },
+          },
+          boost: 1,
+        },
+      },
+      {
+        bool: {
+          must: {
+            match: {
+              name: 'Tan Nguyen',
+            },
+          },
+          boost: 2,
+        },
+      },
+      {
+        bool: {
+          must: {
+            match_phrase: {
+              name: 'Tan Nguyen',
+            },
+          },
+          boost: 4,
+        },
+      },
+    ]);
   });
 });

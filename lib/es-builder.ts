@@ -5,6 +5,7 @@ import {
   IFilteredType,
   Operator,
   Ordering,
+  PrioritySearch,
   SearchAnalyzes,
   Searching,
 } from './es.types';
@@ -25,154 +26,24 @@ import {
  * const result = searchByKeyword(keyword, attributes);
  * // Returns the Elasticsearch query object.
  */
+
 export function convertSearchAnalyzer(
   keyword: string,
   attributes: AttributeDtoEs[]
 ): object {
-  let isLink = false;
-  const isContainSpecialChar = checkSpecialCharacters(keyword);
-  if (keyword.includes('http')) {
-    isLink = true;
-    attributes = attributes.filter((e) => e.isLink);
-  }
-
-  const strAccent = removeAccent(keyword);
+  const keywordNoAccent = removeAccent(keyword);
   const should = [];
-  if (strAccent != keyword) {
-    for (const attribute of attributes) {
-      if (attribute.subKey) {
-        should.push(
-          convertSingleSearchAnalyzer(
-            `${attribute.key}.${attribute.subKey}`,
-            keyword,
-            attribute.rate * 2
-          )
-        );
-      }
-
-      //search exactly result with special characters
-      if (isContainSpecialChar) {
-        if (!isLink) {
-          should.push(
-            convertSingleSearchAnalyzer(
-              `${attribute.key}.accent`,
-              strAccent,
-              attribute.rate * 1,
-              'match'
-            )
-          );
-        }
-        should.push(
-          convertSingleSearchAnalyzer(
-            `${attribute.key}.accent`,
-            strAccent,
-            attribute.rate * 3
-          ),
-          convertSingleSearchAnalyzer(
-            `${attribute.key}.keyword`,
-            keyword,
-            attribute.rate * 5,
-            'term'
-          )
-        );
-      } else {
-        if (!isLink) {
-          should.push(
-            convertSingleSearchAnalyzer(
-              `${attribute.key}.accent`,
-              strAccent,
-              attribute.rate * 1,
-              'match'
-            ),
-            convertSingleSearchAnalyzer(
-              attribute.key,
-              keyword,
-              attribute.rate * 2,
-              'match'
-            )
-          );
-        }
-        should.push(
-          convertSingleSearchAnalyzer(
-            attribute.key,
-            keyword,
-            attribute.rate * 4
-          )
-        );
-      }
-    }
-  } else {
-    for (const attribute of attributes) {
-      if (attribute.allowSearchNoAccent) {
-        should.push(
-          convertSingleSearchAnalyzer(
-            `${attribute.key}.accent`,
-            keyword,
-            attribute.rate * 3
-          )
-        );
-      }
-      if (attribute.subKey) {
-        should.push(
-          convertSingleSearchAnalyzer(
-            `${attribute.key}.${attribute.subKey}`,
-            keyword,
-            attribute.rate * 4
-          )
-        );
-      }
-
-      //search exactly result with special characters
-      if (isContainSpecialChar) {
-        if (!isLink) {
-          should.push(
-            convertSingleSearchAnalyzer(
-              `${attribute.key}.accent`,
-              keyword,
-              attribute.rate * 1,
-              'match'
-            )
-          );
-        }
-        should.push(
-          convertSingleSearchAnalyzer(
-            `${attribute.key}.keyword`,
-            keyword,
-            attribute.rate * 5,
-            'term'
-          )
-        );
-      } else {
-        if (!isLink) {
-          if (attribute.allowSearchNoAccent) {
-            should.push(
-              convertSingleSearchAnalyzer(
-                `${attribute.key}.accent`,
-                keyword,
-                attribute.rate * 1,
-                'match'
-              )
-            );
-          }
-          should.push(
-            convertSingleSearchAnalyzer(
-              attribute.key,
-              keyword,
-              attribute.rate * 2,
-              'match'
-            )
-          );
-        }
-        should.push(
-          convertSingleSearchAnalyzer(
-            attribute.key,
-            keyword,
-            attribute.rate * 4
-          )
-        );
-      }
+  for (const attribute of attributes) {
+    // If keyword have accent
+    if (keywordNoAccent != keyword) {
+      should.push(
+        ...searchWithKeywordHasAccent(attribute, keyword, keywordNoAccent)
+      );
+    } else {
+      should.push(...searchWithKeywordWithoutAccent(attribute, keyword));
     }
   }
+
   const searchTerms = {
     bool: {
       should,
@@ -183,6 +54,161 @@ export function convertSearchAnalyzer(
   return searchTerms;
 }
 
+/**
+ * Create a single "should" clause for an Elasticsearch query.
+ * @param attribute - The attribute to search.
+ * @param value - The value to match.
+ * @param valueNoAccent - Value remove accent.
+ * @returns A single "should" clause for the Elasticsearch query.
+ */
+
+export function searchWithKeywordHasAccent(
+  attribute: AttributeDtoEs,
+  value: string,
+  valueNoAccent: string
+) {
+  const isLink = value.includes('http');
+  const isContainSpecialChar = checkSpecialCharacters(value);
+  const should = [];
+
+  if (!isLink) {
+    //Case: Keyword is not link => search each word with priority lowest
+    should.push(
+      convertSingleSearchAnalyzer(
+        `${attribute.key}.accent`,
+        valueNoAccent,
+        attribute.rate * PrioritySearch.Lowest,
+        'match'
+      )
+    );
+  }
+
+  //search exactly result with special characters
+  if (isContainSpecialChar) {
+    should.push(
+      //Case: Search all of word with priority medium (use match_phrase)
+      convertSingleSearchAnalyzer(
+        `${attribute.key}.accent`,
+        valueNoAccent,
+        attribute.rate * PrioritySearch.Medium
+      )
+    );
+  } else {
+    if (!isLink) {
+      should.push(
+        //Case: Keyword is not link => search each word with priority low
+        convertSingleSearchAnalyzer(
+          attribute.key,
+          value,
+          attribute.rate * PrioritySearch.Low,
+          'match'
+        )
+      );
+    }
+    //Case: Search all of word with priority high (use match_phrase)
+    should.push(
+      convertSingleSearchAnalyzer(
+        attribute.key,
+        value,
+        attribute.rate * PrioritySearch.High
+      )
+    );
+  }
+
+  should.push(
+    //Case: Search exactly keyword with priority highest
+    convertSingleSearchAnalyzer(
+      `${attribute.key}.keyword`,
+      value,
+      attribute.rate * PrioritySearch.Highest,
+      'term'
+    )
+  );
+
+  return should;
+}
+
+/**
+ * Create a single "should" clause for an Elasticsearch query.
+ * @param attribute - The attribute to search.
+ * @param value - The value to match.
+ * @returns A single "should" clause for the Elasticsearch query.
+ */
+
+export function searchWithKeywordWithoutAccent(
+  attribute: AttributeDtoEs,
+  value: string
+) {
+  const isLink = value.includes('http');
+  const isContainSpecialChar = checkSpecialCharacters(value);
+  const should = [];
+  if (attribute.allowSearchNoAccent) {
+    //Allow search without accent (use match_phrase)
+    should.push(
+      convertSingleSearchAnalyzer(
+        `${attribute.key}.accent`,
+        value,
+        attribute.rate * PrioritySearch.Medium
+      )
+    );
+  }
+
+  //search exactly result with special characters
+  if (isContainSpecialChar) {
+    if (!isLink) {
+      //Case: Keyword is not link => search each word with priority lowest
+      should.push(
+        convertSingleSearchAnalyzer(
+          `${attribute.key}.accent`,
+          value,
+          attribute.rate * PrioritySearch.Lowest,
+          'match'
+        )
+      );
+    }
+    //Case: Search exactly keyword with priority highest
+    should.push(
+      convertSingleSearchAnalyzer(
+        `${attribute.key}.keyword`,
+        value,
+        attribute.rate * PrioritySearch.Highest,
+        'term'
+      )
+    );
+  } else {
+    if (!isLink) {
+      if (attribute.allowSearchNoAccent) {
+        //Case: Keyword is not link => search each word which is removed accent with priority lowest
+        should.push(
+          convertSingleSearchAnalyzer(
+            `${attribute.key}.accent`,
+            value,
+            attribute.rate * PrioritySearch.Lowest,
+            'match'
+          )
+        );
+      }
+      //Case: Keyword is not link => search each word with priority low
+      should.push(
+        convertSingleSearchAnalyzer(
+          attribute.key,
+          value,
+          attribute.rate * PrioritySearch.Low,
+          'match'
+        )
+      );
+    }
+    //Case: Search all of word with priority high (use match_phrase)
+    should.push(
+      convertSingleSearchAnalyzer(
+        attribute.key,
+        value,
+        attribute.rate * PrioritySearch.High
+      )
+    );
+  }
+  return should;
+}
 /**
  * Create a single "should" clause for an Elasticsearch query.
  * @param key - The key to match against.
@@ -740,6 +766,7 @@ export function buildQueryArgsToElasticsearchQuery<
   offset?: number;
   limit?: number;
   isHighlight?: boolean;
+  track_total_hits?: boolean;
 }) {
   const {
     filters = [],
@@ -748,9 +775,13 @@ export function buildQueryArgsToElasticsearchQuery<
     offset,
     limit,
     isHighlight = false,
+    track_total_hits = false,
   } = args;
   const esFilter = convertFilteringElasticsearchQuery<T>(filters);
-  const esSearch = convertSearchingToElasticsearchQuery<U>(searches, isHighlight);
+  const esSearch = convertSearchingToElasticsearchQuery<U>(
+    searches,
+    isHighlight
+  );
   const esOrder = convertOrderingToElasticsearchQuery<V>(orders);
 
   return {
@@ -763,6 +794,6 @@ export function buildQueryArgsToElasticsearchQuery<
     ...(limit && { size: limit }),
     ...(esOrder.length && { sort: esOrder }),
     ...(isHighlight && { highlight: esSearch.highlight }),
-    // track_total_hits: true,
+    ...(track_total_hits && { track_total_hits }),
   };
 }
